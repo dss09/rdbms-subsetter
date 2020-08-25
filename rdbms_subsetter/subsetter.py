@@ -74,13 +74,7 @@ from sqlalchemy.engine.reflection import Inspector
 
 from dialects.postgres import fix_postgres_array_of_enum
 
-# Python2 has a totally different definition for ``input``; overriding it here
-try:
-    input = raw_input
-except NameError:
-    pass
-
-__version__ = '0.2.6.2'
+__version__ = '0.2.6.2+whyfly.1'
 
 SIGNAL_ROW_ADDED = 'row_added'
 
@@ -355,6 +349,15 @@ class Db(object):
                         self.create_row_in(source_parent_row, target_db,
                                            target_parent)
 
+            pks = hashable((source_row[key] for key in target.pk))
+            target.n_rows += 1
+
+            # insert source row here to prevent recursion
+            if self.args.buffer == 0:
+                target_db.insert_one(target, pks, source_row)
+            else:
+                target.pending[pks] = source_row
+
             # make sure that all referenced rows are in referenced table(s)
             for constraint in target.constraints:
                 target_referred = target_db.tables[(constraint[
@@ -378,13 +381,7 @@ class Db(object):
                             self.create_row_in(source_referred_row, target_db,
                                                target_referred)
 
-            pks = hashable((source_row[key] for key in target.pk))
-            target.n_rows += 1
-
-            if self.args.buffer == 0:
-                target_db.insert_one(target, pks, source_row)
-            else:
-                target.pending[pks] = source_row
+            # defer signal?
             signal(SIGNAL_ROW_ADDED).send(self,
                                           source_row=source_row,
                                           target_db=target_db,
