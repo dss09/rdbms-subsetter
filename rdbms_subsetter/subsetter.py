@@ -123,7 +123,7 @@ def _random_row_gen_fn(self):
             if self.n_rows > 1000:
                 fraction = n / float(self.n_rows)
                 qry = sa.sql.select([self, ]).where(self.random_row_func() <
-                                                    fraction)
+                                                    fraction).limit(n)
                 results = self.db.conn.execute(qry).fetchall()
                 # we may stop wanting rows at any point, so shuffle them so as not to
                 # skew the sample toward those near the beginning
@@ -170,7 +170,7 @@ def _by_pk(self, pk):
 
 def _completeness_score(self):
     """Scores how close a target table is to being filled enough to quit"""
-    table = (self.schema if self.schema else "") + self.name
+    table = (self.schema + '.' if self.schema else "") + self.name
     fetch_all = self.fetch_all
     requested = len(self.requested)
     required = len(self.required)
@@ -638,7 +638,16 @@ def generate():
     source = Db(args.source, args, schemas)
     target = Db(args.dest, args, schemas)
     if set(source.tables.keys()) != set(target.tables.keys()):
-        raise Exception('Source and target databases have different tables')
+        def missing_in_second(full, subset):
+            return ', '.join(
+                '%s.%s' % item for item in set(full).difference(subset)) or '-'
+
+        raise Exception(
+            'Source and target databases have different tables,'
+            ' missing in source: %s; missing in target: %s' % (
+                missing_in_second(target.tables, source.tables),
+                missing_in_second(source.tables, target.tables)
+            ))
     source.assign_target(target)
     if source.confirm():
         source.create_subset_in(target)
