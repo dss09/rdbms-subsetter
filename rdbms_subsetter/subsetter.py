@@ -266,10 +266,13 @@ class Db(object):
                 constraints = all_constraints.get(tbl_name, [])
             tbl.constraints = constraints
             for fk in (tbl.fks + constraints):
-                fk['constrained_schema'] = tbl_schema
-                fk['constrained_table'] = tbl_name  # TODO: check against constrained_table
-                self.tables[(fk['referred_schema'], fk['referred_table']
-                             )].child_fks.append(fk)
+                # skip constrains checking for excluded tables.
+                if not _table_matches_any_pattern(tbl.schema, tbl.name, self.args.exclude_tables):
+                    fk['constrained_schema'] = tbl_schema
+                    fk['constrained_table'] = tbl_name  # TODO: check against constrained_table
+
+                    self.tables[(fk['referred_schema'], fk['referred_table']
+                                 )].child_fks.append(fk)
 
     def __repr__(self):
         return "Db('%s')" % self.sqla_conn
