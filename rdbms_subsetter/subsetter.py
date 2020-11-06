@@ -144,7 +144,7 @@ def _next_row(self):
         return self.target.requested.popleft()
     else:
         try:
-            return (next(self.random_rows), False)  # not prioritized
+            return next(self.random_rows), False  # not prioritized
         except StopIteration:
             return None
 
@@ -211,7 +211,9 @@ def _import_modules(import_list):
 
 
 class Db(object):
-    def __init__(self, sqla_conn, args, schemas=[None]):
+    def __init__(self, sqla_conn, args, schemas=None):
+        if schemas is None:
+            schemas = [None]
         self.args = args
         self.sqla_conn = sqla_conn
         self.schemas = schemas
@@ -266,13 +268,11 @@ class Db(object):
                 constraints = all_constraints.get(tbl_name, [])
             tbl.constraints = constraints
             for fk in (tbl.fks + constraints):
-                # skip constrains checking for excluded tables.
-                if not _table_matches_any_pattern(tbl.schema, tbl.name, self.args.exclude_tables):
-                    fk['constrained_schema'] = tbl_schema
-                    fk['constrained_table'] = tbl_name  # TODO: check against constrained_table
+                fk['constrained_schema'] = tbl_schema
+                fk['constrained_table'] = tbl_name  # TODO: check against constrained_table
 
-                    self.tables[(fk['referred_schema'], fk['referred_table']
-                                 )].child_fks.append(fk)
+                self.tables[(fk['referred_schema'], fk['referred_table']
+                             )].child_fks.append(fk)
 
     def __repr__(self):
         return "Db('%s')" % self.sqla_conn
@@ -334,8 +334,7 @@ class Db(object):
         if not row_exists:
             # make sure that all required rows are in parent table(s)
             for fk in target.fks:
-                target_parent = target_db.tables[(fk['referred_schema'], fk[
-                    'referred_table'])]
+                target_parent = target_db.tables[(fk['referred_schema'], fk['referred_table'])]
                 slct = sa.sql.select([target_parent, ])
                 any_non_null_key_columns = False
                 for (parent_col, child_col) in zip(fk['referred_columns'],
@@ -403,7 +402,7 @@ class Db(object):
             for (n, desired_row) in enumerate(self.conn.execute(slct)):
                 if prioritized:
                     child.target.required.append((desired_row, prioritized))
-                elif (n == 0):
+                elif n == 0:
                     child.target.requested.appendleft((desired_row, prioritized
                                                        ))
                 else:
@@ -591,7 +590,8 @@ argparser.add_argument(
     '-T',
     dest='exclude_tables',
     help=
-    'Tables to exclude. When both -t and -T are given, the behavior is to include just the tables that match at least one -t switch but no -T switches.',
+    'Tables to exclude. When both -t and -T are given, the behavior is to include just the tables that match at '
+    'least one -t switch but no -T switches.',
     type=str,
     action='append',
     default=[])
@@ -622,6 +622,7 @@ def merge_config_args(args):
     args.tables.extend(args.config.get("tables", []))
     args.schema.extend(args.config.get("schemas", []))
     args.full_tables.extend(args.config.get("full_tables", []))
+
 
 def generate():
     args = argparser.parse_args()
